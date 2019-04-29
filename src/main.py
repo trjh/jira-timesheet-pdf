@@ -29,7 +29,6 @@ if 'JIRA_USERPASSWORD' in os.environ:
 else:
     password = getpass.getpass("Password: ")
 
-
 if 'JIRA_WORKLOG_FROM_DATE' in os.environ:
     from_date = datetime.strptime(os.environ['JIRA_WORKLOG_FROM_DATE'], '%Y-%m-%d').date()
 else:
@@ -39,7 +38,6 @@ if 'JIRA_WORKLOG_TO_DATE' in os.environ:
     to_date = datetime.strptime(os.environ['JIRA_WORKLOG_TO_DATE'], '%Y-%m-%d').date()
 else:
     to_date = datetime.strptime(input("To date (e.g. 2016-12-31): "),'%Y-%m-%d').date()
-
 
 if 'JIRA_PROJECTID' in os.environ:
     project = os.environ['JIRA_PROJECTID']
@@ -71,8 +69,13 @@ def get_worklog(assignee):
         for w in jira.worklogs(issue.key):
             started = datetime.strptime(w.started[:-5],
                                         '%Y-%m-%dT%H:%M:%S.%f')
-            author = w.author
-            if author.name != assignee:
+            # author = w.author
+            # if author.name != assignee:
+            #
+            # this is probably crude and not very future-proofed, but it
+            # works against my JIRA cloud instance, where the above does not
+            author = w.raw['author']['name']
+            if author != assignee:
                 continue
 
             if not (from_date <= started.date() <= to_date):
