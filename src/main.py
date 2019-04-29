@@ -13,6 +13,7 @@ from reportlab.lib.pagesizes import landscape, letter, inch
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Table
 from reportlab.lib.styles import getSampleStyleSheet
 from jira import JIRA
+from flask_table import Table, Col
 
 if 'JIRA_SERVER' in os.environ:
     server = os.environ['JIRA_SERVER']
@@ -60,6 +61,7 @@ def get_worklog(assignee):
     jql = 'timespent > 0 AND project = %s ORDER BY updated DESC' % project 
     issues = jira.search_issues(jql)
         
+    assignees = dict()
     worklogs = []
     date_worklogs = defaultdict(list)
     issue_worklogs = defaultdict(list)
@@ -75,6 +77,7 @@ def get_worklog(assignee):
             # this is probably crude and not very future-proofed, but it
             # works against my JIRA cloud instance, where the above does not
             author = w.raw['author']['name']
+	    assignees(author)++
             if author != assignee:
                 continue
 
@@ -182,8 +185,15 @@ def register_fonts():
 
 @app.route("/worklog/<assignee>")
 def worklog(assignee):
-    get_worklog(assignee)
-    return send_file('../%s.pdf' % assignee)
+    return get_worklog(assignee)
+    # get_worklog(assignee)
+    # return send_file('../%s.pdf' % assignee)
+
+@app.route("/worklog")
+def worklogentry():
+    return '''
+<b>Hello, World!</b>
+'''
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=80)

@@ -8,6 +8,7 @@ default Jira API.
 # How to run the script?
 
 - Clone this repository
+- `docker build -t jira-timesheet-stage stage`
 - `docker build -t jira-timesheet-export .`
 - (Optional) Set ENV data using `env` file (copy env.default to env and adapt variables)
 - ```docker run --env-file=env -it -p 8080:80 -v `pwd`:/code jira-timesheet-export python3 src/main.py ```
