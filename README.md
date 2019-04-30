@@ -5,6 +5,10 @@ export of a timesheet for particular user. The purpose of this script is to
 allow you to export the timesheet for specific user time range, only using the
 default Jira API.
 
+I forked the [original](jordanjambazov/jira-timesheet-pdf) because I wanted
+the simpler view of the table in HTML, and to be able to see at a glace which
+days I'd logged 7 or more hours on.
+
 # How to run the script?
 
 - Clone this repository
