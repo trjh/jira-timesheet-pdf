@@ -13,7 +13,7 @@ from reportlab.lib.pagesizes import landscape, letter, inch
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Table
 from reportlab.lib.styles import getSampleStyleSheet
 from jira import JIRA
-from flask_table import Table, Col
+from tabulate import tabulate
 
 if 'JIRA_SERVER' in os.environ:
     server = os.environ['JIRA_SERVER']
@@ -77,7 +77,7 @@ def get_worklog(assignee):
             # this is probably crude and not very future-proofed, but it
             # works against my JIRA cloud instance, where the above does not
             author = w.raw['author']['name']
-	    assignees(author)++
+            assignees[author] =+ 1
             if author != assignee:
                 continue
 
@@ -105,6 +105,7 @@ def get_worklog(assignee):
 
     total_spent = 0.0
 
+    day_spent = dict()	# key is a column number
     def cell_value(col, row, date, issue):
         nonlocal total_spent
 
@@ -120,6 +121,10 @@ def get_worklog(assignee):
             task_total = sum(map(lambda w: w['spent'],
                                  filter(lambda w: w['issue'].key == issue,
                                         date_worklogs[date])))
+            # this probably shouldn't be put here as it means it is computed a
+            # lot more times than need be
+            day_spent[col] += task_total
+            print("date ",date," total time ",day_spent[col])
             total_spent += task_total
             return "{:.1f}".format(task_total) if task_total else ""
         return ""
@@ -132,7 +137,7 @@ def get_worklog(assignee):
         ]
         for row, issue in enumerate([None] + list(issue_worklogs.keys()))
     ]
-
+    
     register_fonts()
     doc = SimpleDocTemplate('%s.pdf' % assignee, pagesize=landscape(letter))
 
@@ -159,7 +164,9 @@ def get_worklog(assignee):
 
     doc.build(elements)
     print('Done')
-    return doc
+    #return doc
+    print(" ".join(elements))
+    return " ".join(elements)
 
 
 def get_dates_in_range(from_date, to_date):
@@ -190,6 +197,7 @@ def worklog(assignee):
     # return send_file('../%s.pdf' % assignee)
 
 @app.route("/worklog")
+@app.route("/worklog/")
 def worklogentry():
     return '''
 <b>Hello, World!</b>
