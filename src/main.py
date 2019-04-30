@@ -3,7 +3,7 @@ import textwrap
 import argparse
 import os
 import socket
-from flask import Flask, make_response, send_file
+from flask import Flask, make_response, send_file, render_template
 from collections import defaultdict
 from datetime import datetime, timedelta
 from reportlab.pdfbase import pdfmetrics
@@ -49,6 +49,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--log', nargs='?', help='log')
 args = parser.parse_args()
 
+fastdebug = 0
+html = 1
 
 DATE_FORMAT = "%d/%m/%y"
 
@@ -56,43 +58,45 @@ app = Flask(__name__)
 
 def get_worklog(assignee):
 
-    jira = JIRA('https://{0}'.format(server),
-                basic_auth=(username, password))
-    jql = 'timespent > 0 AND project = %s ORDER BY updated DESC' % project 
-    issues = jira.search_issues(jql)
+    if fastdebug != 1:
+        jira = JIRA('https://{0}'.format(server),
+                    basic_auth=(username, password))
+        jql = 'timespent > 0 AND project = %s ORDER BY updated DESC' % project 
+        issues = jira.search_issues(jql)
         
     assignees = dict()
     worklogs = []
     date_worklogs = defaultdict(list)
     issue_worklogs = defaultdict(list)
     issues_data = {}
-    for issue in issues:
-        issues_data[issue.key] = issue
-        for w in jira.worklogs(issue.key):
-            started = datetime.strptime(w.started[:-5],
-                                        '%Y-%m-%dT%H:%M:%S.%f')
-            # author = w.author
-            # if author.name != assignee:
-            #
-            # this is probably crude and not very future-proofed, but it
-            # works against my JIRA cloud instance, where the above does not
-            author = w.raw['author']['name']
-            assignees[author] =+ 1
-            if author != assignee:
-                continue
+    if fastdebug != 1:
+        for issue in issues:
+            issues_data[issue.key] = issue
+            for w in jira.worklogs(issue.key):
+                started = datetime.strptime(w.started[:-5],
+                                            '%Y-%m-%dT%H:%M:%S.%f')
+                # author = w.author
+                # if author.name != assignee:
+                #
+                # this is probably crude and not very future-proofed, but it
+                # works against my JIRA cloud instance, where the above does not
+                author = w.raw['author']['name']
+                assignees[author] =+ 1
+                if author != assignee:
+                    continue
 
-            if not (from_date <= started.date() <= to_date):
-                continue
+                if not (from_date <= started.date() <= to_date):
+                    continue
 
-            spent = w.timeSpentSeconds / 3600
+                spent = w.timeSpentSeconds / 3600
 
-            worklog = {
-                "started": started, "spent": spent, "author": author,
-                "issue": issue,
-            }
-            worklogs.append(worklog)
-            date_worklogs[started.date()].append(worklog)
-            issue_worklogs[issue.key].append(worklog)
+                worklog = {
+                    "started": started, "spent": spent, "author": author,
+                    "issue": issue,
+                }
+                worklogs.append(worklog)
+                date_worklogs[started.date()].append(worklog)
+                issue_worklogs[issue.key].append(worklog)
 
     ts = [
         ('GRID', (0, 0), (-1, -1), 0.5, colors.lightgrey),
@@ -105,7 +109,7 @@ def get_worklog(assignee):
 
     total_spent = 0.0
 
-    day_spent = dict()	# key is a column number
+    day_spent = ['Total']       # key is a column number
     def cell_value(col, row, date, issue):
         nonlocal total_spent
 
@@ -124,12 +128,13 @@ def get_worklog(assignee):
             # this probably shouldn't be put here as it means it is computed a
             # lot more times than need be
             day_spent[col] += task_total
-            print("date ",date," total time ",day_spent[col])
             total_spent += task_total
             return "{:.1f}".format(task_total) if task_total else ""
         return ""
 
     dates = get_dates_in_range(from_date, to_date)
+    day_spent = ['Total'] + [0] * len(dates)
+    print ("day_spent", day_spent)
     data = [
         [
             cell_value(col, row, date, issue)
@@ -137,37 +142,50 @@ def get_worklog(assignee):
         ]
         for row, issue in enumerate([None] + list(issue_worklogs.keys()))
     ]
-    
-    register_fonts()
-    doc = SimpleDocTemplate('%s.pdf' % assignee, pagesize=landscape(letter))
 
-    elements = []
+    if fastdebug == 1:
+        print(data)
+        data = [['', '08\nM', '09\nT', '10\nW', '11\nT', '12\nF', '13\nS', '14\nS', '15\nM', '16\nT', '17\nW', '18\nT', '19\nF', '20\nS', '21\nS', '22\nM', '23\nT', '24\nW', '25\nT', '26\nF'], ['TICKET-1', '', '', '', '', '1.0', '', '', '', '', '', '', '', '', '', '', '', '', '', ''], ['TICKET-2', '', '', '', '', '', '', '', '0.2', '', '', '', '', '', '', '', '', '', '', ''], ['TICKET-3', '', '6.0', '', '', '6.0', '3.0', '2.0', '7.0', '', '', '', '', '', '', '', '', '', '', ''], ['TICKET-4', '', '', '', '8.0', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']]
+        day_spent = ['Total', 0, 6.0, 0, 8.0, 7.0, 3.0, 2.0, 7.166666666666667, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
-    stylesheet = getSampleStyleSheet()
-    p = Paragraph('''
-    <para align=center spacea=30>
-        <font size=15>Jira Tasks Report ({0}-{1})</font>
-    </para>'''.format(
-        from_date.strftime(DATE_FORMAT),
-        to_date.strftime(DATE_FORMAT)), stylesheet["BodyText"])
-    elements.append(p)
+    day_spent = list(map(lambda x: round(x,1) if isinstance(x, float) else x, day_spent))
+    #data.append('%.2f' % elem for elem in day_spent)
+    #data.append((lambda x: '%.2f' % x if ininstance(x, float) else x) for elem in day_spent)
+    #print(day_spent)
+    data.append(day_spent)
 
-    cw = [None] + [0.2*inch] * (len(data[0]) - 1)
-    t = Table(data, style=ts, colWidths=cw)
-    elements.append(t)
+    if html != 1:
+        register_fonts()
+        doc = SimpleDocTemplate('%s.pdf' % assignee, pagesize=landscape(letter))
 
-    p = Paragraph('''
-    <para align=center spaceb=15>
-        <font size=10>Total Hours: {:.2f}</font>
-    </para>'''.format(total_spent), stylesheet["BodyText"])
-    elements.append(p)
+        elements = []
 
-    doc.build(elements)
-    print('Done')
-    #return doc
-    print(" ".join(elements))
-    return " ".join(elements)
+        stylesheet = getSampleStyleSheet()
+        p = Paragraph('''
+        <para align=center spacea=30>
+            <font size=15>Jira Tasks Report ({0}-{1})</font>
+        </para>'''.format(
+            from_date.strftime(DATE_FORMAT),
+            to_date.strftime(DATE_FORMAT)), stylesheet["BodyText"])
+        elements.append(p)
 
+        cw = [None] + [0.2*inch] * (len(data[0]) - 1)
+        t = Table(data, style=ts, colWidths=cw)
+        elements.append(t)
+
+        p = Paragraph('''
+        <para align=center spaceb=15>
+            <font size=10>Total Hours: {:.2f}</font>
+        </para>'''.format(total_spent), stylesheet["BodyText"])
+        elements.append(p)
+
+        doc.build(elements)
+        print('Done')
+        return doc
+
+    # now the html way...
+    table = tabulate(data,headers="firstrow",tablefmt="html")
+    return render_template('output.html',name=assignee,table=table,total=total_spent,assignees=assignees.keys())
 
 def get_dates_in_range(from_date, to_date):
     dates = []
@@ -192,9 +210,11 @@ def register_fonts():
 
 @app.route("/worklog/<assignee>")
 def worklog(assignee):
-    return get_worklog(assignee)
-    # get_worklog(assignee)
-    # return send_file('../%s.pdf' % assignee)
+    if html == 1:
+        return get_worklog(assignee)
+
+    get_worklog(assignee)
+    return send_file('../%s.pdf' % assignee)
 
 @app.route("/worklog")
 @app.route("/worklog/")

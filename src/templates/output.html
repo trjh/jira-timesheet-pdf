@@ -27,10 +27,19 @@ table td {
 </HEAD>
 <BODY>
 <title>Jira Tasks Report</title>
+<h1>Jira Tasks Report</h1>
 
+<p>
 for: {{ name }}
-
+</p>
+<br>
 {{ table|safe }}
 
+<br>
+
 Total Hours: {{ total }}
+
+<br>
+Other assignees:
+{{ assignees }}
 </BODY>
