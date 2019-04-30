@@ -13,7 +13,6 @@ from reportlab.lib.pagesizes import landscape, letter, inch
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Table
 from reportlab.lib.styles import getSampleStyleSheet
 from jira import JIRA
-from tabulate import tabulate
 
 if 'JIRA_SERVER' in os.environ:
     server = os.environ['JIRA_SERVER']
@@ -44,6 +43,11 @@ if 'JIRA_PROJECTID' in os.environ:
     project = os.environ['JIRA_PROJECTID']
 else:
     project = input("JIRA Project ID: ")
+
+if 'DAY_LOG_GOAL' in os.environ:
+    day_log_goal = os.environ['DAY_LOG_GOAL']
+else:
+    day_log_goal = 7
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--log', nargs='?', help='log')
@@ -134,7 +138,6 @@ def get_worklog(assignee):
 
     dates = get_dates_in_range(from_date, to_date)
     day_spent = ['Total'] + [0] * len(dates)
-    print ("day_spent", day_spent)
     data = [
         [
             cell_value(col, row, date, issue)
@@ -147,11 +150,9 @@ def get_worklog(assignee):
         print(data)
         data = [['', '08\nM', '09\nT', '10\nW', '11\nT', '12\nF', '13\nS', '14\nS', '15\nM', '16\nT', '17\nW', '18\nT', '19\nF', '20\nS', '21\nS', '22\nM', '23\nT', '24\nW', '25\nT', '26\nF'], ['TICKET-1', '', '', '', '', '1.0', '', '', '', '', '', '', '', '', '', '', '', '', '', ''], ['TICKET-2', '', '', '', '', '', '', '', '0.2', '', '', '', '', '', '', '', '', '', '', ''], ['TICKET-3', '', '6.0', '', '', '6.0', '3.0', '2.0', '7.0', '', '', '', '', '', '', '', '', '', '', ''], ['TICKET-4', '', '', '', '8.0', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']]
         day_spent = ['Total', 0, 6.0, 0, 8.0, 7.0, 3.0, 2.0, 7.166666666666667, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        assignees = {"bill": 1, "ted": 2}
 
     day_spent = list(map(lambda x: round(x,1) if isinstance(x, float) else x, day_spent))
-    #data.append('%.2f' % elem for elem in day_spent)
-    #data.append((lambda x: '%.2f' % x if ininstance(x, float) else x) for elem in day_spent)
-    #print(day_spent)
     data.append(day_spent)
 
     if html != 1:
@@ -184,9 +185,51 @@ def get_worklog(assignee):
         return doc
 
     # now the html way...
-    table = tabulate(data,headers="firstrow",tablefmt="html")
-    return render_template('output.html',name=assignee,table=table,total=total_spent,assignees=assignees.keys())
+    table = html_table(data)
+    # other assignees
+    aprint = map(lambda x: '<a href="/worklog/'+str(x)+'">'+str(x)+'</a>',
+                 list(assignees.keys()))
+    aprint = ", ".join(aprint)
+    return render_template('output.html',
+                           name=assignee,
+                           table=table,
+                           total=total_spent,
+                           assignees=aprint)
 
+#
+# build our own html table that puts emphasis on the ticket names, the day
+# totals, and colors any column with more than 7 hours worked as green
+# ...input is a 2 dimensional table
+#
+goodcolor=' style="background-color:#00FF00"'
+wecolor=' style="background-color:whitesmoke"'
+def html_table(data):
+    output = "<table><thead>"
+    lastrow = len(data)-1
+    for row, column in enumerate(data):
+        if row == 1:
+            output += "</thead>\n<tbody>\n"
+        output += "<tr>"
+        for column, cell in enumerate(data[row]):
+            # emphasis on first column and last row
+            if column == 0 or row == lastrow:
+                cell = "<strong>"+str(cell)+"</strong>"
+
+            color=""
+            if column != 0 and data[lastrow][column] >= day_log_goal:
+                color=goodcolor
+            elif column != 0 and data[0][column].endswith('S'):
+                color=wecolor
+            
+            if row == 0:
+                output += "<th"+color+">"+str(cell)+"</th>"
+            else:
+                output += "<td"+color+">"+str(cell)+"</td>"
+
+        output += "</tr>\n"
+    output += "\n</tbody>\n</table>\n"
+    return output
+                
 def get_dates_in_range(from_date, to_date):
     dates = []
     current_date = from_date
